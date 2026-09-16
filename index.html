@@ -15,64 +15,85 @@
 </head>
 <body>
 
-  <!-- Top Navigation / Header -->
-  <div class="header-bar">
-    <div class="header-left">
-      <h1>Take Your Attendance</h1>
-      <span id="connectionStatus" class="status-badge online" title="Connection Status">
-        <span class="status-dot"></span>
-        <span class="status-text">Online</span>
-      </span>
+  <div class="app-container">
+    <!-- Top Navigation / Header -->
+    <div class="header-bar">
+      <div class="header-left">
+        <h1>Take Your Attendance</h1>
+        <span id="connectionStatus" class="status-badge online" title="Connection Status">
+          <span class="status-dot"></span>
+          <span class="status-text">Online</span>
+        </span>
+      </div>
+      <div class="header-actions">
+        <button id="pwaInstallBtn" class="install-btn" style="display: none;" title="Install RTR Attendance">
+          ⬇️ Install
+        </button>
+        <button class="settings-btn" onclick="openRollManager()" title="Manage Roll Numbers">
+          <span class="settings-icon">⚙️</span> <span class="settings-label">Roll Numbers</span>
+        </button>
+      </div>
     </div>
-    <div class="header-actions">
-      <button id="pwaInstallBtn" class="install-btn" style="display: none;" title="Install RTR Attendance">
-        ⬇️ Install
-      </button>
-      <button class="settings-btn" onclick="openRollManager()" title="Manage Roll Numbers">
-        <span class="settings-icon">⚙️</span> <span class="settings-label">Roll Numbers</span>
-      </button>
+
+    <!-- Top Control Card (Subject, Date, Session) -->
+    <div class="controls-card">
+      <div class="top">
+        <div class="input-wrap">
+          <label for="subject" class="field-label">Subject / Class</label>
+          <input type="text" id="subject" placeholder="Enter Subject" value="CSM-C" autocomplete="off">
+        </div>
+        <div class="input-wrap">
+          <label for="date" class="field-label">Date</label>
+          <input type="date" id="date">
+        </div>
+      </div>
+
+      <!-- Session Selection -->
+      <div class="session-control">
+        <label class="radio-label">
+          <input type="radio" name="session" value="FORENOON" checked>
+          <span>Forenoon</span>
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="session" value="AFTERNOON">
+          <span>Afternoon</span>
+        </label>
+      </div>
     </div>
-  </div>
 
-  <!-- Subject & Date -->
-  <div class="top">
-    <input type="text" id="subject" placeholder="Enter Subject" value="CSM-C" autocomplete="off">
-    <input type="date" id="date">
-  </div>
-
-  <!-- Session Selection -->
-  <div class="session-control">
-    <label class="radio-label">
-      <input type="radio" name="session" value="FORENOON" checked>
-      <span>Forenoon</span>
-    </label>
-    <label class="radio-label">
-      <input type="radio" name="session" value="AFTERNOON">
-      <span>Afternoon</span>
-    </label>
-  </div>
-
-  <!-- Roll buttons container -->
-  <div id="rollContainer" class="roll-grid"></div>
-
-  <!-- Summary -->
-  <div class="summary-section">
-    <h3 class="section-title">Attendance Summary:</h3>
-    <div class="summary-bar">
-      <span class="summary-item">Present: <b id="present">0</b></span>
-      <span class="summary-divider">|</span>
-      <span class="summary-item">Absent: <b id="absentCount">0</b></span>
-      <span class="summary-divider">|</span>
-      <span class="summary-item">Total: <b id="total">0</b></span>
+    <!-- Roll buttons container -->
+    <div class="roll-section">
+      <div id="rollContainer" class="roll-grid"></div>
     </div>
-  </div>
 
-  <!-- Output -->
-  <div class="register-section">
-    <h3 class="section-title">Attendance Register:</h3>
-    <textarea id="output" readonly></textarea>
-    <br>
-    <button class="copy-btn" onclick="copyText()">📋 Copy Attendance</button>
+    <!-- Summary & Register Grid on Laptop, Stacked on Mobile -->
+    <div class="attendance-dashboard">
+      <!-- Summary -->
+      <div class="summary-section">
+        <h3 class="section-title">Attendance Summary</h3>
+        <div class="summary-cards">
+          <div class="stat-card stat-present">
+            <span class="stat-label">Present</span>
+            <span class="stat-value" id="present">0</span>
+          </div>
+          <div class="stat-card stat-absent">
+            <span class="stat-label">Absent</span>
+            <span class="stat-value" id="absentCount">0</span>
+          </div>
+          <div class="stat-card stat-total">
+            <span class="stat-label">Total</span>
+            <span class="stat-value" id="total">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Output -->
+      <div class="register-section">
+        <h3 class="section-title">Attendance Register</h3>
+        <textarea id="output" readonly></textarea>
+        <button class="copy-btn" onclick="copyText()">📋 Copy Attendance</button>
+      </div>
+    </div>
   </div>
 
   <!-- Roll Number Management Modal -->
