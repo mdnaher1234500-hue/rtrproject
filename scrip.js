@@ -377,6 +377,69 @@ function handleResetRolls() {
   generateRolls();
 }
 
+// --- PWA Offline & Connectivity Helpers ---
+
+let deferredInstallPrompt = null;
+
+function updateOnlineStatus() {
+  const statusEl = document.getElementById("connectionStatus");
+  if (!statusEl) return;
+  const dotEl = statusEl.querySelector(".status-dot");
+  const textEl = statusEl.querySelector(".status-text");
+
+  if (navigator.onLine) {
+    statusEl.className = "status-badge online";
+    if (textEl) textEl.textContent = "Online";
+    statusEl.title = "Connected to network";
+  } else {
+    statusEl.className = "status-badge offline";
+    if (textEl) textEl.textContent = "Offline Mode";
+    statusEl.title = "Working fully offline";
+  }
+}
+
+function registerServiceWorker() {
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker
+        .register("./service-worker.js")
+        .then((reg) => {
+          console.log("RTR Service Worker registered successfully:", reg.scope);
+        })
+        .catch((err) => {
+          console.warn("Service Worker registration failed:", err);
+        });
+    });
+  }
+}
+
+function initPWAInstallation() {
+  const installBtn = document.getElementById("pwaInstallBtn");
+  if (!installBtn) return;
+
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    installBtn.style.display = "inline-flex";
+  });
+
+  installBtn.addEventListener("click", async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      const { outcome } = await deferredInstallPrompt.userChoice;
+      console.log("User install choice:", outcome);
+      deferredInstallPrompt = null;
+      installBtn.style.display = "none";
+    }
+  });
+
+  window.addEventListener("appinstalled", () => {
+    console.log("RTR Attendance App was installed successfully.");
+    installBtn.style.display = "none";
+    deferredInstallPrompt = null;
+  });
+}
+
 // Auto-generate rolls on page load & setup listeners
 window.onload = () => {
   // set today's date if not provided
@@ -402,7 +465,17 @@ window.onload = () => {
     }
   });
 
+  // Online / Offline listeners
+  window.addEventListener("online", updateOnlineStatus);
+  window.addEventListener("offline", updateOnlineStatus);
+  updateOnlineStatus();
+
+  // PWA setup
+  registerServiceWorker();
+  initPWAInstallation();
+
   loadCurrentClassRolls();
   generateRolls();
 };
+
 
