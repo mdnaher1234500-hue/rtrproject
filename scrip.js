@@ -2,7 +2,7 @@
 // RTR College Attendance Management - Multi-Class System
 // =========================================================
 
-// Canonical Default CSM-C Roll Numbers
+// Canonical Default CSM-C Roll Numbers (Preserved exactly as configured: 69 rolls)
 const DEFAULT_ROLLS = [
   "D0","D1","D2","D3","D4","D5","D6","D7","D8","D9",
   "E0","E1","E2","E3","E4","E5","E6","E7","E8","E9",
@@ -17,7 +17,8 @@ const DEFAULT_ROLLS = [
 
 // Storage Keys
 const CLASSES_LIST_KEY = "attendance_classes_list";
-const STORAGE_PREFIX = "attendance_rolls_";
+const ROLLS_STORAGE_PREFIX = "attendance_rolls_";
+const RECORD_STORAGE_PREFIX = "attendance_rec_";
 const ACTIVE_CLASS_KEY = "attendance_active_class";
 const DEFAULT_CLASS = "CSM-C";
 
@@ -26,7 +27,7 @@ let classesList = [];
 let activeClass = DEFAULT_CLASS;
 let modalActiveClass = DEFAULT_CLASS;
 let currentRolls = [];
-let absentMap = {}; // Map of className -> Set of absent roll numbers
+let currentAbsentSet = new Set();
 let editingRollIndex = -1;
 let editingClassName = "";
 let currentSettingsTab = "rolls";
@@ -37,7 +38,7 @@ let currentSettingsTab = "rolls";
 
 function initClassSystem() {
   try {
-    // 1. Load or migrate classes list
+    // 1. Load or initialize classes list
     const savedClasses = localStorage.getItem(CLASSES_LIST_KEY);
     if (savedClasses) {
       const parsed = JSON.parse(savedClasses);
@@ -51,8 +52,8 @@ function initClassSystem() {
       saveClassesList(classesList);
     }
 
-    // 2. Ensure CSM-C has its roll numbers migrated/saved
-    const csmcRolls = localStorage.getItem(STORAGE_PREFIX + DEFAULT_CLASS);
+    // 2. Ensure CSM-C has its roll numbers preserved
+    const csmcRolls = localStorage.getItem(ROLLS_STORAGE_PREFIX + DEFAULT_CLASS);
     if (!csmcRolls) {
       saveRollsForClass(DEFAULT_CLASS, DEFAULT_ROLLS);
     }
@@ -89,7 +90,7 @@ function saveClassesList(list) {
 
 function getRollsForClass(className) {
   try {
-    const saved = localStorage.getItem(STORAGE_PREFIX + className);
+    const saved = localStorage.getItem(ROLLS_STORAGE_PREFIX + className);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
@@ -99,13 +100,12 @@ function getRollsForClass(className) {
   } catch (e) {
     console.error(`Error reading roll configuration for ${className}:`, e);
   }
-  // If it's CSM-C, default to canonical list; otherwise empty array
   return className === DEFAULT_CLASS ? [...DEFAULT_ROLLS] : [];
 }
 
 function saveRollsForClass(className, rolls) {
   try {
-    localStorage.setItem(STORAGE_PREFIX + className, JSON.stringify(rolls));
+    localStorage.setItem(ROLLS_STORAGE_PREFIX + className, JSON.stringify(rolls));
   } catch (e) {
     console.error(`Error saving roll configuration for ${className}:`, e);
   }
@@ -122,6 +122,68 @@ function resetRollsForClass(className) {
     console.error(`Error resetting roll configuration for ${className}:`, e);
   }
 }
+
+// Session-specific Attendance Storage Key
+function getAttendanceRecordKey(className, date, session) {
+  return `${RECORD_STORAGE_PREFIX}${className}_${date}_${session}`;
+}
+
+function loadAttendanceForCurrentSession() {
+  const dateVal = document.getElementById("date")?.value || new Date().toISOString().split("T")[0];
+  const sessionRadio = document.querySelector('input[name="session"]:checked');
+  const session = sessionRadio ? sessionRadio.value : "FORENOON";
+
+  const key = getAttendanceRecordKey(activeClass, dateVal, session);
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        const validSet = new Set(currentRolls);
+        currentAbsentSet = new Set(parsed.filter(r => validSet.has(r)));
+        return;
+      }
+    }
+  } catch (e) {
+    console.error("Error loading session attendance:", e);
+  }
+  currentAbsentSet = new Set();
+}
+
+function saveAttendanceForCurrentSession() {
+  const dateVal = document.getElementById("date")?.value || new Date().toISOString().split("T")[0];
+  const sessionRadio = document.querySelector('input[name="session"]:checked');
+  const session = sessionRadio ? sessionRadio.value : "FORENOON";
+
+  const key = getAttendanceRecordKey(activeClass, dateVal, session);
+  try {
+    localStorage.setItem(key, JSON.stringify([...currentAbsentSet]));
+  } catch (e) {
+    console.error("Error saving session attendance:", e);
+  }
+}
+
+function migrateRollInAttendanceRecords(className, oldRoll, newRoll) {
+  try {
+    const prefix = `${RECORD_STORAGE_PREFIX}${className}_`;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(prefix)) {
+        const recordData = localStorage.getItem(key);
+        if (recordData) {
+          const parsed = JSON.parse(recordData);
+          if (Array.isArray(parsed) && parsed.includes(oldRoll)) {
+            const updated = parsed.map((r) => (r === oldRoll ? newRoll : r));
+            localStorage.setItem(key, JSON.stringify(updated));
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error(`Error migrating roll in attendance records for ${className}:`, e);
+  }
+}
+
 
 // =========================================================
 // Class Dropdowns & Switcher
@@ -175,24 +237,12 @@ function handleModalClassChange(newClass) {
 // Attendance Grid & Summary
 // =========================================================
 
-function getAbsentSet(className) {
-  if (!absentMap[className]) {
-    absentMap[className] = new Set();
-  }
-  return absentMap[className];
-}
-
 function generateRolls() {
   const container = document.getElementById("rollContainer");
   container.innerHTML = "";
 
   currentRolls = getRollsForClass(activeClass);
-  const classAbsent = getAbsentSet(activeClass);
-
-  // Clean absent set to only retain valid rolls in currentRolls
-  const validSet = new Set(currentRolls);
-  const cleanedAbsent = new Set([...classAbsent].filter((r) => validSet.has(r)));
-  absentMap[activeClass] = cleanedAbsent;
+  loadAttendanceForCurrentSession();
 
   if (currentRolls.length === 0) {
     container.innerHTML = `
@@ -206,19 +256,20 @@ function generateRolls() {
   }
 
   currentRolls.forEach((roll) => {
-    const isAbsent = cleanedAbsent.has(roll);
+    const isAbsent = currentAbsentSet.has(roll);
     const btn = document.createElement("button");
     btn.textContent = roll;
     btn.className = "roll-btn" + (isAbsent ? " absent" : "");
 
     btn.onclick = () => {
-      if (cleanedAbsent.has(roll)) {
-        cleanedAbsent.delete(roll);
+      if (currentAbsentSet.has(roll)) {
+        currentAbsentSet.delete(roll);
         btn.classList.remove("absent");
       } else {
-        cleanedAbsent.add(roll);
+        currentAbsentSet.add(roll);
         btn.classList.add("absent");
       }
+      saveAttendanceForCurrentSession();
       updateSummary();
     };
 
@@ -229,10 +280,12 @@ function generateRolls() {
 }
 
 function updateSummary() {
+  // Total configured students for the active class
   const total = currentRolls.length;
-  const classAbsent = getAbsentSet(activeClass);
-  const absentCount = classAbsent.size;
-  const present = total - absentCount;
+  // Count of students marked absent
+  const absentCount = currentAbsentSet.size;
+  // Students present = Total - Absent
+  const present = Math.max(0, total - absentCount);
 
   document.getElementById("total").textContent = total;
   document.getElementById("present").textContent = present;
@@ -253,7 +306,7 @@ function updateSummary() {
   }
 
   const date = formatDate(dateVal);
-  const absList = Array.from(classAbsent).sort().join(", ") || "None";
+  const absList = currentRolls.filter((r) => currentAbsentSet.has(r)).join(", ") || "None";
   const percentVal = total > 0 ? (present / total) * 100 : 0;
   const percentage = Number.isInteger(percentVal) ? percentVal : percentVal.toFixed(2);
 
@@ -470,11 +523,16 @@ function saveRollNumber() {
     const oldRoll = rolls[editingRollIndex];
     rolls[editingRollIndex] = val;
 
-    // Update absent set if student was marked absent
-    const classAbsent = getAbsentSet(modalActiveClass);
-    if (classAbsent.has(oldRoll)) {
-      classAbsent.delete(oldRoll);
-      classAbsent.add(val);
+    // Migrate attendance records belonging ONLY to modalActiveClass
+    migrateRollInAttendanceRecords(modalActiveClass, oldRoll, val);
+
+    // Update active absent record if currently editing the active class
+    if (modalActiveClass === activeClass) {
+      if (currentAbsentSet.has(oldRoll)) {
+        currentAbsentSet.delete(oldRoll);
+        currentAbsentSet.add(val);
+        saveAttendanceForCurrentSession();
+      }
     }
   }
 
@@ -494,8 +552,13 @@ function deleteRoll(index) {
   const confirmed = confirm(`Are you sure you want to delete roll number "${rollToDelete}" from ${modalActiveClass}?`);
   if (!confirmed) return;
 
-  const classAbsent = getAbsentSet(modalActiveClass);
-  classAbsent.delete(rollToDelete);
+  // Only update current session attendance state if modalActiveClass is the currently active class
+  if (modalActiveClass === activeClass) {
+    if (currentAbsentSet.has(rollToDelete)) {
+      currentAbsentSet.delete(rollToDelete);
+      saveAttendanceForCurrentSession();
+    }
+  }
 
   rolls.splice(index, 1);
   saveRollsForClass(modalActiveClass, rolls);
@@ -533,8 +596,11 @@ function handleResetRolls() {
 
   resetRollsForClass(modalActiveClass);
 
-  const classAbsent = getAbsentSet(modalActiveClass);
-  classAbsent.clear();
+  // Only reset currentAbsentSet if modalActiveClass is the currently active class
+  if (modalActiveClass === activeClass) {
+    currentAbsentSet.clear();
+    saveAttendanceForCurrentSession();
+  }
 
   const searchVal = document.getElementById("rollSearchInput")?.value || "";
   renderRollList(searchVal);
@@ -585,7 +651,7 @@ function renderClassList() {
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "btn-sm btn-delete";
     deleteBtn.textContent = "Delete";
-    deleteBtn.disabled = classesList.length <= 1; // Prevent deleting only remaining class
+    deleteBtn.disabled = classesList.length <= 1;
     deleteBtn.title = classesList.length <= 1 ? "At least one class must exist" : "Delete Class";
     deleteBtn.onclick = () => deleteClass(cls);
 
@@ -657,8 +723,7 @@ function saveClass() {
     // Adding new class
     classesList.push(val);
     saveClassesList(classesList);
-    // Initialize empty roll list for new class
-    if (!localStorage.getItem(STORAGE_PREFIX + val)) {
+    if (!localStorage.getItem(ROLLS_STORAGE_PREFIX + val)) {
       saveRollsForClass(val, []);
     }
   } else {
@@ -673,12 +738,6 @@ function saveClass() {
     // Migrate rolls storage
     const oldRolls = getRollsForClass(oldName);
     saveRollsForClass(val, oldRolls);
-
-    // Migrate absent records
-    if (absentMap[oldName]) {
-      absentMap[val] = absentMap[oldName];
-      delete absentMap[oldName];
-    }
 
     // Update active class if renamed
     if (activeClass === oldName) {
@@ -708,7 +767,6 @@ function deleteClass(clsName) {
   classesList = classesList.filter((c) => c !== clsName);
   saveClassesList(classesList);
 
-  // If deleted class was active, switch to first remaining class
   if (activeClass === clsName) {
     activeClass = classesList[0] || DEFAULT_CLASS;
     localStorage.setItem(ACTIVE_CLASS_KEY, activeClass);
@@ -797,10 +855,15 @@ window.onload = () => {
     dateInput.value = new Date().toISOString().split("T")[0];
   }
 
-  // 2. Setup listeners for Date & Session radios
-  document.getElementById("date")?.addEventListener("change", updateSummary);
+  // 2. Setup listeners for Date & Session radios -> regenerate attendance
+  document.getElementById("date")?.addEventListener("change", () => {
+    generateRolls();
+  });
+
   document.querySelectorAll('input[name="session"]').forEach((radio) => {
-    radio.addEventListener("change", updateSummary);
+    radio.addEventListener("change", () => {
+      generateRolls();
+    });
   });
 
   // 3. Enter key support on Modals

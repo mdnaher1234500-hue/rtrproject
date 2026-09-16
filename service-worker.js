@@ -1,4 +1,4 @@
-const CACHE_NAME = "rtr-attendance-v1";
+const CACHE_NAME = "rtr-attendance-v4";
 
 const STATIC_ASSETS = [
   "./",
@@ -66,3 +66,4 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
