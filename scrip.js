@@ -1,4 +1,8 @@
-// Canonical Default Roll Numbers
+// =========================================================
+// RTR College Attendance Management - Multi-Class System
+// =========================================================
+
+// Canonical Default CSM-C Roll Numbers
 const DEFAULT_ROLLS = [
   "D0","D1","D2","D3","D4","D5","D6","D7","D8","D9",
   "E0","E1","E2","E3","E4","E5","E6","E7","E8","E9",
@@ -11,75 +15,208 @@ const DEFAULT_ROLLS = [
   "77"
 ];
 
+// Storage Keys
+const CLASSES_LIST_KEY = "attendance_classes_list";
 const STORAGE_PREFIX = "attendance_rolls_";
-let currentRolls = [];
-let absent = new Set();
-let editingRollIndex = -1; // -1 for Add, >= 0 for Edit
+const ACTIVE_CLASS_KEY = "attendance_active_class";
+const DEFAULT_CLASS = "CSM-C";
 
-// Helper: Get active class name
-function getCurrentClass() {
-  const subjectInput = document.getElementById("subject");
-  return (subjectInput && subjectInput.value ? subjectInput.value.trim().toUpperCase() : "CSM-C") || "CSM-C";
+// Application State
+let classesList = [];
+let activeClass = DEFAULT_CLASS;
+let modalActiveClass = DEFAULT_CLASS;
+let currentRolls = [];
+let absentMap = {}; // Map of className -> Set of absent roll numbers
+let editingRollIndex = -1;
+let editingClassName = "";
+let currentSettingsTab = "rolls";
+
+// =========================================================
+// Storage & Migration Helpers
+// =========================================================
+
+function initClassSystem() {
+  try {
+    // 1. Load or migrate classes list
+    const savedClasses = localStorage.getItem(CLASSES_LIST_KEY);
+    if (savedClasses) {
+      const parsed = JSON.parse(savedClasses);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        classesList = parsed;
+      } else {
+        classesList = [DEFAULT_CLASS];
+      }
+    } else {
+      classesList = [DEFAULT_CLASS];
+      saveClassesList(classesList);
+    }
+
+    // 2. Ensure CSM-C has its roll numbers migrated/saved
+    const csmcRolls = localStorage.getItem(STORAGE_PREFIX + DEFAULT_CLASS);
+    if (!csmcRolls) {
+      saveRollsForClass(DEFAULT_CLASS, DEFAULT_ROLLS);
+    }
+
+    // 3. Load active class
+    const savedActive = localStorage.getItem(ACTIVE_CLASS_KEY);
+    if (savedActive && classesList.includes(savedActive)) {
+      activeClass = savedActive;
+    } else {
+      activeClass = classesList[0] || DEFAULT_CLASS;
+      localStorage.setItem(ACTIVE_CLASS_KEY, activeClass);
+    }
+
+    modalActiveClass = activeClass;
+  } catch (e) {
+    console.error("Initialization error:", e);
+    classesList = [DEFAULT_CLASS];
+    activeClass = DEFAULT_CLASS;
+    modalActiveClass = DEFAULT_CLASS;
+  }
 }
 
-// Storage Helpers
+function getAllClasses() {
+  return [...classesList];
+}
+
+function saveClassesList(list) {
+  try {
+    localStorage.setItem(CLASSES_LIST_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error("Error saving classes list:", e);
+  }
+}
+
 function getRollsForClass(className) {
   try {
     const saved = localStorage.getItem(STORAGE_PREFIX + className);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
   } catch (e) {
-    console.error("Error reading roll configuration:", e);
+    console.error(`Error reading roll configuration for ${className}:`, e);
   }
-  return [...DEFAULT_ROLLS];
+  // If it's CSM-C, default to canonical list; otherwise empty array
+  return className === DEFAULT_CLASS ? [...DEFAULT_ROLLS] : [];
 }
 
 function saveRollsForClass(className, rolls) {
   try {
     localStorage.setItem(STORAGE_PREFIX + className, JSON.stringify(rolls));
   } catch (e) {
-    console.error("Error saving roll configuration:", e);
+    console.error(`Error saving roll configuration for ${className}:`, e);
   }
 }
 
 function resetRollsForClass(className) {
   try {
-    localStorage.removeItem(STORAGE_PREFIX + className);
+    if (className === DEFAULT_CLASS) {
+      saveRollsForClass(DEFAULT_CLASS, DEFAULT_ROLLS);
+    } else {
+      saveRollsForClass(className, []);
+    }
   } catch (e) {
-    console.error("Error resetting roll configuration:", e);
+    console.error(`Error resetting roll configuration for ${className}:`, e);
   }
 }
 
-// Load rolls for current class
-function loadCurrentClassRolls() {
-  const cls = getCurrentClass();
-  currentRolls = getRollsForClass(cls);
-  // Clean absent set to only retain valid rolls in currentRolls
-  const validSet = new Set(currentRolls);
-  absent = new Set([...absent].filter(r => validSet.has(r)));
+// =========================================================
+// Class Dropdowns & Switcher
+// =========================================================
+
+function populateClassDropdowns() {
+  const mainSelect = document.getElementById("classSelector");
+  const modalSelect = document.getElementById("modalClassSelect");
+
+  if (mainSelect) {
+    mainSelect.innerHTML = "";
+    classesList.forEach((cls) => {
+      const opt = document.createElement("option");
+      opt.value = cls;
+      opt.textContent = cls;
+      if (cls === activeClass) opt.selected = true;
+      mainSelect.appendChild(opt);
+    });
+  }
+
+  if (modalSelect) {
+    modalSelect.innerHTML = "";
+    classesList.forEach((cls) => {
+      const opt = document.createElement("option");
+      opt.value = cls;
+      opt.textContent = cls;
+      if (cls === modalActiveClass) opt.selected = true;
+      modalSelect.appendChild(opt);
+    });
+  }
 }
 
-// Attendance Grid Generation
+function handleClassChange(newClass) {
+  if (!classesList.includes(newClass)) return;
+  activeClass = newClass;
+  localStorage.setItem(ACTIVE_CLASS_KEY, activeClass);
+  modalActiveClass = activeClass;
+  populateClassDropdowns();
+  generateRolls();
+}
+
+function handleModalClassChange(newClass) {
+  if (!classesList.includes(newClass)) return;
+  modalActiveClass = newClass;
+  const searchInput = document.getElementById("rollSearchInput");
+  if (searchInput) searchInput.value = "";
+  renderRollList();
+}
+
+// =========================================================
+// Attendance Grid & Summary
+// =========================================================
+
+function getAbsentSet(className) {
+  if (!absentMap[className]) {
+    absentMap[className] = new Set();
+  }
+  return absentMap[className];
+}
+
 function generateRolls() {
   const container = document.getElementById("rollContainer");
   container.innerHTML = "";
-  loadCurrentClassRolls();
 
-  currentRolls.forEach(roll => {
+  currentRolls = getRollsForClass(activeClass);
+  const classAbsent = getAbsentSet(activeClass);
+
+  // Clean absent set to only retain valid rolls in currentRolls
+  const validSet = new Set(currentRolls);
+  const cleanedAbsent = new Set([...classAbsent].filter((r) => validSet.has(r)));
+  absentMap[activeClass] = cleanedAbsent;
+
+  if (currentRolls.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; padding: 24px; color: #64748b; font-size: 14px; font-weight: 600;">
+        No roll numbers added for <strong>${activeClass}</strong>.<br>
+        Click <button class="btn-primary" style="margin-top: 8px; font-size: 12px; height: 32px;" onclick="openSettingsModal()">⚙️ Manage Roll Numbers</button> to add students.
+      </div>
+    `;
+    updateSummary();
+    return;
+  }
+
+  currentRolls.forEach((roll) => {
+    const isAbsent = cleanedAbsent.has(roll);
     const btn = document.createElement("button");
     btn.textContent = roll;
-    btn.className = "roll-btn" + (absent.has(roll) ? " absent" : "");
+    btn.className = "roll-btn" + (isAbsent ? " absent" : "");
 
     btn.onclick = () => {
-      if (absent.has(roll)) {
-        absent.delete(roll);
+      if (cleanedAbsent.has(roll)) {
+        cleanedAbsent.delete(roll);
         btn.classList.remove("absent");
       } else {
-        absent.add(roll);
+        cleanedAbsent.add(roll);
         btn.classList.add("absent");
       }
       updateSummary();
@@ -91,17 +228,16 @@ function generateRolls() {
   updateSummary();
 }
 
-// Summary and Register Generation
 function updateSummary() {
   const total = currentRolls.length;
-  const absentCount = absent.size;
+  const classAbsent = getAbsentSet(activeClass);
+  const absentCount = classAbsent.size;
   const present = total - absentCount;
 
   document.getElementById("total").textContent = total;
   document.getElementById("present").textContent = present;
   document.getElementById("absentCount").textContent = absentCount;
 
-  const subject = getCurrentClass();
   const dateVal = document.getElementById("date").value;
   const sessionRadio = document.querySelector('input[name="session"]:checked');
   const session = sessionRadio ? sessionRadio.value : "FORENOON";
@@ -110,19 +246,19 @@ function updateSummary() {
     if (!input) return "Date";
     const d = new Date(input);
     if (isNaN(d)) return input;
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
     const yyyy = d.getFullYear();
     return `${dd}-${mm}-${yyyy}`;
   }
 
   const date = formatDate(dateVal);
-  const absList = Array.from(absent).sort().join(", ") || "None";
+  const absList = Array.from(classAbsent).sort().join(", ") || "None";
   const percentVal = total > 0 ? (present / total) * 100 : 0;
   const percentage = Number.isInteger(percentVal) ? percentVal : percentVal.toFixed(2);
 
   document.getElementById("output").value =
-`${session} ATTENDANCE – ${subject}
+`${session} ATTENDANCE – ${activeClass}
 
 Date: ${date}
 
@@ -135,32 +271,58 @@ Total: ${total}
 Attendance: ${percentage}%`;
 }
 
-// Copy Attendance Text
 function copyText() {
   const text = document.getElementById("output").value;
   navigator.clipboard.writeText(text).then(() => {
     alert("Attendance copied!");
-  }).catch(err => {
+  }).catch((err) => {
     console.error(err);
     alert("Copy failed. Select the text and copy manually.");
   });
 }
 
-// --- Roll Number Management Modal Logic ---
+// =========================================================
+// Settings Modal (Tabs & Management)
+// =========================================================
 
-function openRollManager() {
-  const cls = getCurrentClass();
-  document.getElementById("modalClassBadge").textContent = cls;
-  const searchInput = document.getElementById("rollSearchInput");
-  if (searchInput) searchInput.value = "";
-  renderRollList();
+function openSettingsModal() {
+  modalActiveClass = activeClass;
+  populateClassDropdowns();
+  switchSettingsTab(currentSettingsTab);
   document.getElementById("settingsModal").style.display = "flex";
 }
 
-function closeRollManager() {
+function closeSettingsModal() {
   document.getElementById("settingsModal").style.display = "none";
+  populateClassDropdowns();
   generateRolls();
 }
+
+function switchSettingsTab(tab) {
+  currentSettingsTab = tab;
+  const tabBtnRolls = document.getElementById("tabBtnRolls");
+  const tabBtnClasses = document.getElementById("tabBtnClasses");
+  const tabContentRolls = document.getElementById("tabContentRolls");
+  const tabContentClasses = document.getElementById("tabContentClasses");
+
+  if (tab === "rolls") {
+    tabBtnRolls.classList.add("active");
+    tabBtnClasses.classList.remove("active");
+    tabContentRolls.style.display = "block";
+    tabContentClasses.style.display = "none";
+    const searchInput = document.getElementById("rollSearchInput");
+    if (searchInput) searchInput.value = "";
+    renderRollList();
+  } else {
+    tabBtnClasses.classList.add("active");
+    tabBtnRolls.classList.remove("active");
+    tabContentClasses.style.display = "block";
+    tabContentRolls.style.display = "none";
+    renderClassList();
+  }
+}
+
+// --- Roll Number Tab Logic ---
 
 function handleRollSearch(term) {
   renderRollList(term);
@@ -170,25 +332,26 @@ function renderRollList(filterTerm = "") {
   const tbody = document.getElementById("rollTableBody");
   tbody.innerHTML = "";
   const filter = filterTerm.trim().toUpperCase();
+  const rolls = getRollsForClass(modalActiveClass);
 
-  currentRolls.forEach((roll, index) => {
+  rolls.forEach((roll, index) => {
     if (filter && !roll.toUpperCase().includes(filter)) {
       return;
     }
 
     const tr = document.createElement("tr");
 
-    // Index column
+    // # Index
     const tdIndex = document.createElement("td");
     tdIndex.textContent = index + 1;
     tr.appendChild(tdIndex);
 
-    // Roll name column
+    // Roll Badge
     const tdRoll = document.createElement("td");
     tdRoll.innerHTML = `<span class="roll-badge">${roll}</span>`;
     tr.appendChild(tdRoll);
 
-    // Reorder column (Up / Down)
+    // Reorder (Up / Down)
     const tdReorder = document.createElement("td");
     tdReorder.className = "reorder-cell";
 
@@ -203,14 +366,14 @@ function renderRollList(filterTerm = "") {
     downBtn.className = "btn-icon";
     downBtn.title = "Move Down";
     downBtn.textContent = "▼";
-    downBtn.disabled = index === currentRolls.length - 1;
+    downBtn.disabled = index === rolls.length - 1;
     downBtn.onclick = () => moveRoll(index, 1);
 
     tdReorder.appendChild(upBtn);
     tdReorder.appendChild(downBtn);
     tr.appendChild(tdReorder);
 
-    // Actions column (Edit / Delete)
+    // Actions (Edit / Delete)
     const tdActions = document.createElement("td");
     tdActions.className = "actions-cell";
 
@@ -236,16 +399,15 @@ function renderRollList(filterTerm = "") {
     const td = document.createElement("td");
     td.colSpan = 4;
     td.className = "no-data";
-    td.textContent = filter ? "No matching roll numbers found." : "No roll numbers configured.";
+    td.textContent = filter ? "No matching roll numbers found." : `No roll numbers configured for ${modalActiveClass}.`;
     tr.appendChild(td);
     tbody.appendChild(tr);
   }
 }
 
-// Add Roll Modal
 function openAddRollModal() {
   editingRollIndex = -1;
-  document.getElementById("rollEditModalTitle").textContent = "Add Roll Number";
+  document.getElementById("rollEditModalTitle").textContent = `Add Roll Number (${modalActiveClass})`;
   const rollInput = document.getElementById("rollInput");
   rollInput.value = "";
   clearRollInputError();
@@ -253,12 +415,12 @@ function openAddRollModal() {
   rollInput.focus();
 }
 
-// Edit Roll Modal
 function openEditRollModal(index) {
   editingRollIndex = index;
-  document.getElementById("rollEditModalTitle").textContent = "Edit Roll Number";
+  const rolls = getRollsForClass(modalActiveClass);
+  document.getElementById("rollEditModalTitle").textContent = `Edit Roll Number (${modalActiveClass})`;
   const rollInput = document.getElementById("rollInput");
-  rollInput.value = currentRolls[index];
+  rollInput.value = rolls[index] || "";
   clearRollInputError();
   document.getElementById("rollEditModal").style.display = "flex";
   rollInput.focus();
@@ -280,7 +442,6 @@ function showRollInputError(msg) {
   errorEl.style.display = "block";
 }
 
-// Save Roll (Add or Edit)
 function saveRollNumber() {
   const rollInput = document.getElementById("rollInput");
   const val = rollInput.value.trim();
@@ -290,101 +451,286 @@ function saveRollNumber() {
     return;
   }
 
-  // Check uniqueness within class (excluding self when editing)
-  const isDuplicate = currentRolls.some((r, idx) => {
+  const rolls = getRollsForClass(modalActiveClass);
+
+  // Check uniqueness within the selected class
+  const isDuplicate = rolls.some((r, idx) => {
     if (editingRollIndex >= 0 && idx === editingRollIndex) return false;
     return r.toUpperCase() === val.toUpperCase();
   });
 
   if (isDuplicate) {
-    showRollInputError(`Roll number "${val}" already exists in this class.`);
+    showRollInputError(`Roll number "${val}" already exists in ${modalActiveClass}.`);
     return;
   }
 
-  const cls = getCurrentClass();
-
   if (editingRollIndex === -1) {
-    // Add new
-    currentRolls.push(val);
+    rolls.push(val);
   } else {
-    // Edit existing
-    const oldRoll = currentRolls[editingRollIndex];
-    currentRolls[editingRollIndex] = val;
+    const oldRoll = rolls[editingRollIndex];
+    rolls[editingRollIndex] = val;
 
-    // Preserve absent record
-    if (absent.has(oldRoll)) {
-      absent.delete(oldRoll);
-      absent.add(val);
+    // Update absent set if student was marked absent
+    const classAbsent = getAbsentSet(modalActiveClass);
+    if (classAbsent.has(oldRoll)) {
+      classAbsent.delete(oldRoll);
+      classAbsent.add(val);
     }
   }
 
-  saveRollsForClass(cls, currentRolls);
+  saveRollsForClass(modalActiveClass, rolls);
   closeRollEditModal();
   const searchVal = document.getElementById("rollSearchInput")?.value || "";
   renderRollList(searchVal);
-  generateRolls();
+
+  if (modalActiveClass === activeClass) {
+    generateRolls();
+  }
 }
 
-// Delete Roll
 function deleteRoll(index) {
-  const rollToDelete = currentRolls[index];
-  const confirmed = confirm(`Are you sure you want to delete roll number "${rollToDelete}"?`);
+  const rolls = getRollsForClass(modalActiveClass);
+  const rollToDelete = rolls[index];
+  const confirmed = confirm(`Are you sure you want to delete roll number "${rollToDelete}" from ${modalActiveClass}?`);
   if (!confirmed) return;
 
-  absent.delete(rollToDelete);
-  currentRolls.splice(index, 1);
+  const classAbsent = getAbsentSet(modalActiveClass);
+  classAbsent.delete(rollToDelete);
 
-  const cls = getCurrentClass();
-  saveRollsForClass(cls, currentRolls);
+  rolls.splice(index, 1);
+  saveRollsForClass(modalActiveClass, rolls);
 
   const searchVal = document.getElementById("rollSearchInput")?.value || "";
   renderRollList(searchVal);
-  generateRolls();
+
+  if (modalActiveClass === activeClass) {
+    generateRolls();
+  }
 }
 
-// Move Roll (Reordering)
 function moveRoll(index, direction) {
+  const rolls = getRollsForClass(modalActiveClass);
   const targetIndex = index + direction;
-  if (targetIndex < 0 || targetIndex >= currentRolls.length) return;
+  if (targetIndex < 0 || targetIndex >= rolls.length) return;
 
-  const temp = currentRolls[index];
-  currentRolls[index] = currentRolls[targetIndex];
-  currentRolls[targetIndex] = temp;
+  const temp = rolls[index];
+  rolls[index] = rolls[targetIndex];
+  rolls[targetIndex] = temp;
 
-  const cls = getCurrentClass();
-  saveRollsForClass(cls, currentRolls);
+  saveRollsForClass(modalActiveClass, rolls);
 
   const searchVal = document.getElementById("rollSearchInput")?.value || "";
   renderRollList(searchVal);
-  generateRolls();
+
+  if (modalActiveClass === activeClass) {
+    generateRolls();
+  }
 }
 
-// Reset to Default
 function handleResetRolls() {
-  const cls = getCurrentClass();
-  const confirmed = confirm(`Are you sure you want to reset roll numbers to default for "${cls}"?`);
+  const confirmed = confirm(`Are you sure you want to reset roll numbers for "${modalActiveClass}"?`);
   if (!confirmed) return;
 
-  resetRollsForClass(cls);
-  currentRolls = getRollsForClass(cls);
+  resetRollsForClass(modalActiveClass);
 
-  // Clean absent set to valid items
-  const validSet = new Set(currentRolls);
-  absent = new Set([...absent].filter(r => validSet.has(r)));
+  const classAbsent = getAbsentSet(modalActiveClass);
+  classAbsent.clear();
 
   const searchVal = document.getElementById("rollSearchInput")?.value || "";
   renderRollList(searchVal);
+
+  if (modalActiveClass === activeClass) {
+    generateRolls();
+  }
+}
+
+// --- Class Management Tab Logic ---
+
+function renderClassList() {
+  const tbody = document.getElementById("classTableBody");
+  tbody.innerHTML = "";
+
+  classesList.forEach((cls, index) => {
+    const tr = document.createElement("tr");
+
+    // # Index
+    const tdIndex = document.createElement("td");
+    tdIndex.textContent = index + 1;
+    tr.appendChild(tdIndex);
+
+    // Class Name & Active Indicator
+    const tdName = document.createElement("td");
+    const isCurrent = cls === activeClass;
+    tdName.innerHTML = `
+      <strong style="color: #0f172a; font-size: 14px;">${cls}</strong>
+      ${isCurrent ? '<span style="display:inline-block; margin-left:6px; font-size:11px; padding:2px 6px; background:#ecfdf5; color:#059669; border-radius:4px; font-weight:700;">Active</span>' : ''}
+    `;
+    tr.appendChild(tdName);
+
+    // Total Students
+    const tdCount = document.createElement("td");
+    const count = getRollsForClass(cls).length;
+    tdCount.innerHTML = `<span class="roll-badge" style="background:#f1f5f9; color:#475569; border-color:#cbd5e1;">${count} Students</span>`;
+    tr.appendChild(tdCount);
+
+    // Actions (Edit / Delete)
+    const tdActions = document.createElement("td");
+    tdActions.className = "actions-cell";
+
+    const editBtn = document.createElement("button");
+    editBtn.className = "btn-sm btn-edit";
+    editBtn.textContent = "Edit";
+    editBtn.onclick = () => openEditClassModal(cls);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "btn-sm btn-delete";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.disabled = classesList.length <= 1; // Prevent deleting only remaining class
+    deleteBtn.title = classesList.length <= 1 ? "At least one class must exist" : "Delete Class";
+    deleteBtn.onclick = () => deleteClass(cls);
+
+    tdActions.appendChild(editBtn);
+    tdActions.appendChild(deleteBtn);
+    tr.appendChild(tdActions);
+
+    tbody.appendChild(tr);
+  });
+}
+
+function openAddClassModal() {
+  editingClassName = "";
+  document.getElementById("classEditModalTitle").textContent = "Add New Class";
+  const classInput = document.getElementById("classInput");
+  classInput.value = "";
+  clearClassInputError();
+  document.getElementById("classEditModal").style.display = "flex";
+  classInput.focus();
+}
+
+function openEditClassModal(clsName) {
+  editingClassName = clsName;
+  document.getElementById("classEditModalTitle").textContent = `Edit Class Name (${clsName})`;
+  const classInput = document.getElementById("classInput");
+  classInput.value = clsName;
+  clearClassInputError();
+  document.getElementById("classEditModal").style.display = "flex";
+  classInput.focus();
+}
+
+function closeClassEditModal() {
+  document.getElementById("classEditModal").style.display = "none";
+}
+
+function clearClassInputError() {
+  const errorEl = document.getElementById("classInputError");
+  errorEl.textContent = "";
+  errorEl.style.display = "none";
+}
+
+function showClassInputError(msg) {
+  const errorEl = document.getElementById("classInputError");
+  errorEl.textContent = msg;
+  errorEl.style.display = "block";
+}
+
+function saveClass() {
+  const classInput = document.getElementById("classInput");
+  const val = classInput.value.trim().toUpperCase();
+
+  if (!val) {
+    showClassInputError("Class name cannot be empty.");
+    return;
+  }
+
+  // Check duplicate
+  const isDuplicate = classesList.some((c) => {
+    if (editingClassName && c.toUpperCase() === editingClassName.toUpperCase()) return false;
+    return c.toUpperCase() === val;
+  });
+
+  if (isDuplicate) {
+    showClassInputError(`Class "${val}" already exists.`);
+    return;
+  }
+
+  if (!editingClassName) {
+    // Adding new class
+    classesList.push(val);
+    saveClassesList(classesList);
+    // Initialize empty roll list for new class
+    if (!localStorage.getItem(STORAGE_PREFIX + val)) {
+      saveRollsForClass(val, []);
+    }
+  } else {
+    // Renaming existing class
+    const oldName = editingClassName;
+    const idx = classesList.indexOf(oldName);
+    if (idx !== -1) {
+      classesList[idx] = val;
+      saveClassesList(classesList);
+    }
+
+    // Migrate rolls storage
+    const oldRolls = getRollsForClass(oldName);
+    saveRollsForClass(val, oldRolls);
+
+    // Migrate absent records
+    if (absentMap[oldName]) {
+      absentMap[val] = absentMap[oldName];
+      delete absentMap[oldName];
+    }
+
+    // Update active class if renamed
+    if (activeClass === oldName) {
+      activeClass = val;
+      localStorage.setItem(ACTIVE_CLASS_KEY, activeClass);
+    }
+    if (modalActiveClass === oldName) {
+      modalActiveClass = val;
+    }
+  }
+
+  closeClassEditModal();
+  populateClassDropdowns();
+  renderClassList();
   generateRolls();
 }
 
-// --- PWA Offline & Connectivity Helpers ---
+function deleteClass(clsName) {
+  if (classesList.length <= 1) {
+    alert("You cannot delete the only remaining class.");
+    return;
+  }
+
+  const confirmed = confirm(`Are you sure you want to delete class "${clsName}"?\nHistorical attendance records will be safely retained.`);
+  if (!confirmed) return;
+
+  classesList = classesList.filter((c) => c !== clsName);
+  saveClassesList(classesList);
+
+  // If deleted class was active, switch to first remaining class
+  if (activeClass === clsName) {
+    activeClass = classesList[0] || DEFAULT_CLASS;
+    localStorage.setItem(ACTIVE_CLASS_KEY, activeClass);
+  }
+  if (modalActiveClass === clsName) {
+    modalActiveClass = classesList[0] || DEFAULT_CLASS;
+  }
+
+  populateClassDropdowns();
+  renderClassList();
+  generateRolls();
+}
+
+// =========================================================
+// PWA Offline & Connectivity Helpers
+// =========================================================
 
 let deferredInstallPrompt = null;
 
 function updateOnlineStatus() {
   const statusEl = document.getElementById("connectionStatus");
   if (!statusEl) return;
-  const dotEl = statusEl.querySelector(".status-dot");
   const textEl = statusEl.querySelector(".status-text");
 
   if (navigator.onLine) {
@@ -440,42 +786,42 @@ function initPWAInstallation() {
   });
 }
 
-// Auto-generate rolls on page load & setup listeners
+// =========================================================
+// Initialization on Page Load
+// =========================================================
+
 window.onload = () => {
-  // set today's date if not provided
-  const dateInput = document.getElementById('date');
+  // 1. Set today's date if not provided
+  const dateInput = document.getElementById("date");
   if (dateInput && !dateInput.value) {
-    dateInput.value = new Date().toISOString().split('T')[0];
+    dateInput.value = new Date().toISOString().split("T")[0];
   }
 
-  // Subject change listener: reload class-specific rolls
-  document.getElementById('subject')?.addEventListener('input', () => {
-    generateRolls();
+  // 2. Setup listeners for Date & Session radios
+  document.getElementById("date")?.addEventListener("change", updateSummary);
+  document.querySelectorAll('input[name="session"]').forEach((radio) => {
+    radio.addEventListener("change", updateSummary);
   });
 
-  document.getElementById('date')?.addEventListener('change', updateSummary);
-  document.querySelectorAll('input[name="session"]').forEach(radio => {
-    radio.addEventListener('change', updateSummary);
+  // 3. Enter key support on Modals
+  document.getElementById("rollInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveRollNumber();
+  });
+  document.getElementById("classInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveClass();
   });
 
-  // Enter key support on Add/Edit roll input
-  document.getElementById('rollInput')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      saveRollNumber();
-    }
-  });
-
-  // Online / Offline listeners
+  // 4. Online / Offline listeners
   window.addEventListener("online", updateOnlineStatus);
   window.addEventListener("offline", updateOnlineStatus);
   updateOnlineStatus();
 
-  // PWA setup
+  // 5. PWA setup
   registerServiceWorker();
   initPWAInstallation();
 
-  loadCurrentClassRolls();
+  // 6. Initialize Multi-Class System
+  initClassSystem();
+  populateClassDropdowns();
   generateRolls();
 };
-
-

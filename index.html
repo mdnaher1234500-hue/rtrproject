@@ -29,18 +29,20 @@
         <button id="pwaInstallBtn" class="install-btn" style="display: none;" title="Install RTR Attendance">
           ⬇️ Install
         </button>
-        <button class="settings-btn" onclick="openRollManager()" title="Manage Roll Numbers">
-          <span class="settings-icon">⚙️</span> <span class="settings-label">Roll Numbers</span>
+        <button class="settings-btn" onclick="openSettingsModal()" title="Manage Classes & Roll Numbers">
+          <span class="settings-icon">⚙️</span> <span class="settings-label">Settings</span>
         </button>
       </div>
     </div>
 
-    <!-- Top Control Card (Subject, Date, Session) -->
+    <!-- Top Control Card (Class Selector, Date, Session) -->
     <div class="controls-card">
       <div class="top">
         <div class="input-wrap">
-          <label for="subject" class="field-label">Subject / Class</label>
-          <input type="text" id="subject" placeholder="Enter Subject" value="CSM-C" autocomplete="off">
+          <label for="classSelector" class="field-label">Class</label>
+          <select id="classSelector" class="class-dropdown" onchange="handleClassChange(this.value)">
+            <!-- Populated dynamically -->
+          </select>
         </div>
         <div class="input-wrap">
           <label for="date" class="field-label">Date</label>
@@ -96,40 +98,80 @@
     </div>
   </div>
 
-  <!-- Roll Number Management Modal -->
+  <!-- Settings Modal (Class Management & Roll Number Management) -->
   <div id="settingsModal" class="modal-overlay" style="display: none;">
     <div class="modal-content">
       <div class="modal-header">
-        <h2>Roll Number Management (<span id="modalClassBadge">CSM-C</span>)</h2>
-        <button class="close-btn" onclick="closeRollManager()">&times;</button>
+        <div class="modal-tabs">
+          <button id="tabBtnRolls" class="tab-btn active" onclick="switchSettingsTab('rolls')">Roll Numbers</button>
+          <button id="tabBtnClasses" class="tab-btn" onclick="switchSettingsTab('classes')">Class Management</button>
+        </div>
+        <button class="close-btn" onclick="closeSettingsModal()">&times;</button>
       </div>
       
-      <div class="modal-toolbar">
-        <button class="btn-primary" onclick="openAddRollModal()">+ Add Roll Number</button>
-        <div class="search-box">
-          <input type="text" id="rollSearchInput" placeholder="Search Roll Number..." oninput="handleRollSearch(this.value)">
+      <!-- Tab 1: Roll Number Management -->
+      <div id="tabContentRolls" class="tab-pane active">
+        <div class="modal-toolbar">
+          <div class="toolbar-left">
+            <label for="modalClassSelect" class="toolbar-label">Class:</label>
+            <select id="modalClassSelect" class="modal-dropdown" onchange="handleModalClassChange(this.value)">
+              <!-- Populated dynamically -->
+            </select>
+            <button class="btn-primary" onclick="openAddRollModal()">+ Add Roll Number</button>
+          </div>
+          <div class="search-box">
+            <input type="text" id="rollSearchInput" placeholder="Search Roll Number..." oninput="handleRollSearch(this.value)">
+          </div>
+        </div>
+
+        <div class="roll-list-container">
+          <table class="roll-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">#</th>
+                <th>Roll Number</th>
+                <th style="width: 100px;">Reorder</th>
+                <th style="width: 140px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="rollTableBody">
+              <!-- Dynamic Roll rows -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-danger-outline" onclick="handleResetRolls()">Reset to Default Roll Numbers</button>
+          <button class="btn-secondary" onclick="closeSettingsModal()">Close</button>
         </div>
       </div>
 
-      <div class="roll-list-container">
-        <table class="roll-table">
-          <thead>
-            <tr>
-              <th style="width: 50px;">#</th>
-              <th>Roll Number</th>
-              <th style="width: 100px;">Reorder</th>
-              <th style="width: 140px;">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="rollTableBody">
-            <!-- Dynamic Roll rows -->
-          </tbody>
-        </table>
-      </div>
+      <!-- Tab 2: Class Management -->
+      <div id="tabContentClasses" class="tab-pane" style="display: none;">
+        <div class="modal-toolbar">
+          <button class="btn-primary" onclick="openAddClassModal()">+ Add Class</button>
+        </div>
 
-      <div class="modal-footer">
-        <button class="btn-danger-outline" onclick="handleResetRolls()">Reset to Default Roll Numbers</button>
-        <button class="btn-secondary" onclick="closeRollManager()">Close</button>
+        <div class="roll-list-container">
+          <table class="roll-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">#</th>
+                <th>Class Name</th>
+                <th style="width: 120px;">Total Students</th>
+                <th style="width: 140px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="classTableBody">
+              <!-- Dynamic Class rows -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="modal-footer">
+          <div></div>
+          <button class="btn-secondary" onclick="closeSettingsModal()">Close</button>
+        </div>
       </div>
     </div>
   </div>
@@ -149,6 +191,25 @@
       <div class="modal-footer">
         <button class="btn-secondary" onclick="closeRollEditModal()">Cancel</button>
         <button class="btn-primary" id="saveRollBtn" onclick="saveRollNumber()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / Edit Class Modal -->
+  <div id="classEditModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h3 id="classEditModalTitle">Add Class</h3>
+        <button class="close-btn" onclick="closeClassEditModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label for="classInput">Class Name:</label>
+        <input type="text" id="classInput" placeholder="e.g. CSM-A" maxlength="30" autofocus>
+        <p id="classInputError" class="error-msg" style="display: none;"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeClassEditModal()">Cancel</button>
+        <button class="btn-primary" id="saveClassBtn" onclick="saveClass()">Save</button>
       </div>
     </div>
   </div>
