@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>College Attendance</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top Navigation / Header -->
+  <div class="header-bar">
+    <h1>Take Your Attendance</h1>
+    <button class="settings-btn" onclick="openRollManager()" title="Manage Roll Numbers">
+      <span class="settings-icon">⚙️</span> <span class="settings-label">Roll Numbers</span>
+    </button>
+  </div>
+
+  <!-- Subject & Date -->
+  <div class="top">
+    <input type="text" id="subject" placeholder="Enter Subject" value="CSM-C" autocomplete="off">
+    <input type="date" id="date">
+  </div>
+
+  <!-- Session Selection -->
+  <div class="session-control">
+    <label class="radio-label">
+      <input type="radio" name="session" value="FORENOON" checked>
+      <span>Forenoon</span>
+    </label>
+    <label class="radio-label">
+      <input type="radio" name="session" value="AFTERNOON">
+      <span>Afternoon</span>
+    </label>
+  </div>
+
+  <!-- Roll buttons container -->
+  <div id="rollContainer" class="roll-grid"></div>
+
+  <!-- Summary -->
+  <div class="summary-section">
+    <h3 class="section-title">Attendance Summary:</h3>
+    <div class="summary-bar">
+      <span class="summary-item">Present: <b id="present">0</b></span>
+      <span class="summary-divider">|</span>
+      <span class="summary-item">Absent: <b id="absentCount">0</b></span>
+      <span class="summary-divider">|</span>
+      <span class="summary-item">Total: <b id="total">0</b></span>
+    </div>
+  </div>
+
+  <!-- Output -->
+  <div class="register-section">
+    <h3 class="section-title">Attendance Register:</h3>
+    <textarea id="output" readonly></textarea>
+    <br>
+    <button class="copy-btn" onclick="copyText()">📋 Copy Attendance</button>
+  </div>
+
+  <!-- Roll Number Management Modal -->
+  <div id="settingsModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Roll Number Management (<span id="modalClassBadge">CSM-C</span>)</h2>
+        <button class="close-btn" onclick="closeRollManager()">&times;</button>
+      </div>
+      
+      <div class="modal-toolbar">
+        <button class="btn-primary" onclick="openAddRollModal()">+ Add Roll Number</button>
+        <div class="search-box">
+          <input type="text" id="rollSearchInput" placeholder="Search Roll Number..." oninput="handleRollSearch(this.value)">
+        </div>
+      </div>
+
+      <div class="roll-list-container">
+        <table class="roll-table">
+          <thead>
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th>Roll Number</th>
+              <th style="width: 100px;">Reorder</th>
+              <th style="width: 140px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rollTableBody">
+            <!-- Dynamic Roll rows -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-danger-outline" onclick="handleResetRolls()">Reset to Default Roll Numbers</button>
+        <button class="btn-secondary" onclick="closeRollManager()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add / Edit Roll Number Modal -->
+  <div id="rollEditModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content modal-sm">
+      <div class="modal-header">
+        <h3 id="rollEditModalTitle">Add Roll Number</h3>
+        <button class="close-btn" onclick="closeRollEditModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label for="rollInput">Roll Number:</label>
+        <input type="text" id="rollInput" placeholder="e.g. L19" maxlength="20" autofocus>
+        <p id="rollInputError" class="error-msg" style="display: none;"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeRollEditModal()">Cancel</button>
+        <button class="btn-primary" id="saveRollBtn" onclick="saveRollNumber()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="scrip.js"></script>
+</body>
+</html>
