@@ -1,5 +1,5 @@
 // =========================================================
-// RTR College Attendance Management - Multi-Class System
+// Class Attendance - Multi-Class System
 // =========================================================
 
 // Canonical Default CSM-C Roll Numbers (Preserved exactly as configured: 69 rolls)
@@ -838,7 +838,7 @@ function initPWAInstallation() {
   });
 
   window.addEventListener("appinstalled", () => {
-    console.log("RTR Attendance App was installed successfully.");
+    console.log("Class Attendance App was installed successfully.");
     installBtn.style.display = "none";
     deferredInstallPrompt = null;
   });

@@ -1,6 +1,6 @@
-# College Attendance Management System
+# Class Attendance
 
-A mobile-friendly, responsive web application for managing classroom attendance with customizable roll number rosters, class-specific persistence, and one-click register formatting.
+Class Attendance is a college attendance management system for managing classes, roll numbers, daily attendance, sessions, and attendance records.
 
 ## Features
 - **Interactive Attendance Grid**: Tap roll numbers to mark present/absent with instant visual feedback.

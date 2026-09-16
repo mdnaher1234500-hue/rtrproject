@@ -1,7 +1,7 @@
 {
-  "name": "RTR College Attendance",
-  "short_name": "RTR Attendance",
-  "description": "Offline-first college attendance management system.",
+  "name": "Class Attendance",
+  "short_name": "Class Attendance",
+  "description": "Class Attendance is a college attendance management system for managing classes, roll numbers, daily attendance, sessions, and attendance records.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
