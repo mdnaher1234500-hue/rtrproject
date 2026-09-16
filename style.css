@@ -179,6 +179,37 @@ body {
   box-shadow: 0 0 0 transparent;
 }
 
+.share-btn {
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #ffffff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 #c7d2fe, 0 3px 6px rgba(99, 102, 241, 0.08);
+  transition: all 0.15s ease;
+  touch-action: manipulation;
+}
+
+.share-btn:hover {
+  background: #eef2ff;
+  color: #3730a3;
+  border-color: #a5b4fc;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 0 #a5b4fc, 0 4px 8px rgba(99, 102, 241, 0.15);
+}
+
+.share-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 transparent;
+}
+
 /* =========================================================
    Controls Card (Subject, Date, Session)
    ========================================================= */
@@ -933,6 +964,13 @@ textarea:focus {
   gap: 10px;
 }
 
+.footer-left-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .btn-danger-outline {
   height: 38px;
   background: #ffffff;
@@ -954,6 +992,31 @@ textarea:focus {
 }
 
 .btn-danger-outline:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 transparent;
+}
+
+.btn-warning-outline {
+  height: 38px;
+  background: #ffffff;
+  color: #d97706;
+  border: 1px solid #fde68a;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 0 #fde68a;
+  transition: all 0.15s ease;
+}
+
+.btn-warning-outline:hover {
+  background: #fef3c7;
+  border-color: #d97706;
+}
+
+.btn-warning-outline:active {
   transform: translateY(2px);
   box-shadow: 0 0 0 transparent;
 }
@@ -1030,6 +1093,12 @@ textarea:focus {
   .modal-footer {
     flex-direction: column;
     align-items: stretch;
+  }
+  .footer-left-actions {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
   }
   .modal-footer button {
     width: 100%;

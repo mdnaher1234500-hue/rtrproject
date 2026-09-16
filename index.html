@@ -29,6 +29,9 @@
         <button id="pwaInstallBtn" class="install-btn" style="display: none;" title="Install Class Attendance">
           ⬇️ Install
         </button>
+        <button id="shareWebsiteBtn" class="share-btn" onclick="shareWebsite()" title="Share Website">
+          <span class="share-icon">🔗</span> <span class="share-label">Share Website</span>
+        </button>
         <button class="settings-btn" onclick="openSettingsModal()" title="Manage Classes & Roll Numbers">
           <span class="settings-icon">⚙️</span> <span class="settings-label">Settings</span>
         </button>
@@ -141,7 +144,10 @@
         </div>
 
         <div class="modal-footer">
-          <button class="btn-danger-outline" onclick="handleResetRolls()">Reset to Default Roll Numbers</button>
+          <div class="footer-left-actions">
+            <button class="btn-danger-outline" onclick="handleDeleteAllRolls()" title="Delete All Roll Numbers from this class">Delete All Roll Numbers</button>
+            <button class="btn-warning-outline" onclick="handleResetRolls()" title="Reset to Default Roll Numbers">Reset to Default</button>
+          </div>
           <button class="btn-secondary" onclick="closeSettingsModal()">Close</button>
         </div>
       </div>

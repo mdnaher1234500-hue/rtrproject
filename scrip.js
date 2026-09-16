@@ -334,6 +334,49 @@ function copyText() {
   });
 }
 
+async function shareWebsite() {
+  const shareData = {
+    title: "Class Attendance",
+    text: "Class Attendance – College Attendance Management System",
+    url: "https://rtrproject.vercel.app/"
+  };
+
+  if (navigator.share) {
+    try {
+      await navigator.share(shareData);
+    } catch (err) {
+      // Ignore user abort/cancellation
+      if (err.name !== "AbortError") {
+        console.error("Share error:", err);
+      }
+    }
+  } else if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText("https://rtrproject.vercel.app/");
+      alert("Website link copied!");
+    } catch (err) {
+      fallbackCopyWebsiteUrl();
+    }
+  } else {
+    fallbackCopyWebsiteUrl();
+  }
+}
+
+function fallbackCopyWebsiteUrl() {
+  try {
+    const tempInput = document.createElement("input");
+    tempInput.value = "https://rtrproject.vercel.app/";
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    document.execCommand("copy");
+    document.body.removeChild(tempInput);
+    alert("Website link copied!");
+  } catch (err) {
+    console.error("Fallback copy failed:", err);
+    alert("Website link: https://rtrproject.vercel.app/");
+  }
+}
+
 // =========================================================
 // Settings Modal (Tabs & Management)
 // =========================================================
@@ -588,6 +631,34 @@ function moveRoll(index, direction) {
   if (modalActiveClass === activeClass) {
     generateRolls();
   }
+}
+
+function handleDeleteAllRolls() {
+  const currentRollsList = getRollsForClass(modalActiveClass);
+  if (currentRollsList.length === 0) {
+    alert(`No roll numbers found in ${modalActiveClass}.`);
+    return;
+  }
+
+  const confirmed = confirm(
+    `Delete all roll numbers?\n\nThis will remove all roll numbers from ${modalActiveClass}.\nHistorical attendance records will NOT be deleted.`
+  );
+  if (!confirmed) return;
+
+  // 1. Delete all roll numbers from class roster only
+  saveRollsForClass(modalActiveClass, []);
+
+  // 2. If editing the currently active class on the main screen, refresh attendance UI
+  if (modalActiveClass === activeClass) {
+    generateRolls();
+  }
+
+  // 3. Refresh modal table
+  const searchVal = document.getElementById("rollSearchInput")?.value || "";
+  renderRollList(searchVal);
+
+  // 4. Notify user
+  alert(`All roll numbers deleted from ${modalActiveClass}.`);
 }
 
 function handleResetRolls() {
